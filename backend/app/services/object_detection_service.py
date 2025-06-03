@@ -148,12 +148,17 @@ class ObjectDetectionService:
                 summary_filepath = os.path.join(current_app.config['GENERATED_FOLDER'], summary_filename)
                 draw_all_bounding_boxes(filepath, detected_objects, summary_filepath)
 
+                # 使用统一的URL生成函数
+                from ..utils.helpers import get_image_url
+                relative_bbox_images = [get_image_url(os.path.basename(img), 'generated') for img in bbox_images]
+                relative_summary_image = get_image_url(os.path.basename(summary_filepath), 'generated')
+
                 return {
                     'success': True,
                     'detected_objects': detected_objects,
                     'original_image': filepath,
-                    'bbox_images': bbox_images,
-                    'summary_image': summary_filepath,  # 新增汇总图片
+                    'bbox_images': relative_bbox_images,
+                    'summary_image': relative_summary_image,  # 新增汇总图片
                     'response_text': response_text
                 }, 200
             else:

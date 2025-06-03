@@ -67,15 +67,69 @@ class ImageQAService:
 
             answer = response.text.strip()
 
+            # 使用统一的URL生成函数
+            from ..utils.helpers import get_image_url
+            image_url = get_image_url(os.path.basename(filepath), 'uploads')
+
             return {
                 'success': True,
                 'answer': answer,
-                'image_path': filepath,
+                'image_path': image_url,
                 'question': question,
                 'model_used': model
             }, 200
 
         except Exception as e:
-            error_msg = f'处理失败: {str(e)}'
+            error_str = str(e)
             print(f"图像问答错误: {e}")
-            return {'success': False, 'error': error_msg}, 500
+
+            # 检查是否是API密钥相关错误
+            if ('API key not valid' in error_str or
+                'INVALID_ARGUMENT' in error_str or
+                '400' in error_str or
+                'API_KEY_INVALID' in error_str):
+                return {
+                    'success': False,
+                    'error': 'API密钥无效或已过期，请检查您的Google API密钥配置',
+                    'error_type': 'api_key_invalid'
+                }, 400
+
+            # 检查是否是认证错误
+            elif ('401' in error_str or
+                  'UNAUTHENTICATED' in error_str or
+                  'authentication' in error_str.lower()):
+                return {
+                    'success': False,
+                    'error': 'API认证失败，请检查您的API密钥',
+                    'error_type': 'authentication_failed'
+                }, 401
+
+            # 检查是否是配额限制错误
+            elif ('429' in error_str or
+                  'RESOURCE_EXHAUSTED' in error_str or
+                  'quota' in error_str.lower() or
+                  'rate limit' in error_str.lower()):
+                return {
+                    'success': False,
+                    'error': 'API调用次数已达到限制，请稍后再试',
+                    'error_type': 'quota_exceeded'
+                }, 429
+
+            # 检查是否是网络连接错误
+            elif ('connection' in error_str.lower() or
+                  'network' in error_str.lower() or
+                  'timeout' in error_str.lower()):
+                return {
+                    'success': False,
+                    'error': '网络连接失败，请检查网络连接后重试',
+                    'error_type': 'network_error'
+                }, 503
+
+            # 其他未知错误
+            else:
+                error_msg = f'处理失败: {error_str}'
+                return {
+                    'success': False,
+                    'error': error_msg,
+                    'error_type': 'unknown_error'
+                }, 500

@@ -17,10 +17,16 @@ import os
 
 
 # 延迟初始化服务
-def get_object_detection_service():
+def get_object_detection_service(api_key=None):
     """获取目标检测服务实例"""
     try:
-        client = init_gemini_client()
+        if api_key:
+            # 使用用户提供的API key
+            from google import genai
+            client = genai.Client(api_key=api_key)
+        else:
+            # 使用默认配置的API key
+            client = init_gemini_client()
         return ObjectDetectionService(client)
     except Exception as e:
         current_app.logger.error(f"初始化目标检测服务失败: {e}")
@@ -57,12 +63,15 @@ def object_detection():
     - object_name: 要检测的对象名称
     """
     try:
+        # 获取用户API key
+        user_api_key = request.headers.get('X-API-Key')
+
         # 获取服务实例
-        service = get_object_detection_service()
+        service = get_object_detection_service(api_key=user_api_key)
         if not service:
             return jsonify({
                 'success': False,
-                'error': '服务初始化失败'
+                'error': '服务初始化失败，请检查API密钥是否正确'
             }), 500
 
         # 支持JSON和form数据
@@ -224,12 +233,15 @@ def compare_detection():
             shared_file = SharedFileObject(shared_filepath)
 
             try:
+                # 获取用户API key
+                user_api_key = request.headers.get('X-API-Key')
+
                 # 获取服务实例
-                service = get_object_detection_service()
+                service = get_object_detection_service(api_key=user_api_key)
                 if not service:
                     return jsonify({
                         'success': False,
-                        'error': '服务初始化失败'
+                        'error': '服务初始化失败，请检查API密钥是否正确'
                     }), 500
 
                 # Gemini 检测 - 使用共享文件路径
@@ -277,12 +289,15 @@ def compare_detection():
             # 创建共享文件对象
             shared_file = SharedFileObject(shared_filepath)
 
+            # 获取用户API key
+            user_api_key = request.headers.get('X-API-Key')
+
             # 获取服务实例
-            service = get_object_detection_service()
+            service = get_object_detection_service(api_key=user_api_key)
             if not service:
                 return jsonify({
                     'success': False,
-                    'error': '服务初始化失败'
+                    'error': '服务初始化失败，请检查API密钥是否正确'
                 }), 500
 
             # Gemini 检测 - 使用共享文件

@@ -29,13 +29,13 @@ def save_uploaded_file(file, upload_folder):
 
     filename = file.filename
     filepath = os.path.join(upload_folder, filename)
-    
+
     # 检查是否是SharedFileObject且文件已经存在于目标位置
     if hasattr(file, 'filepath') and os.path.exists(file.filepath):
         # 如果目标路径和源路径相同，直接返回源路径
         if os.path.abspath(file.filepath) == os.path.abspath(filepath):
             return file.filepath
-    
+
     file.save(filepath)
     return filepath
 
@@ -59,7 +59,68 @@ def save_generated_image(image_bytes, filename, generated_folder):
     filepath = os.path.join(generated_folder, filename)
     with open(filepath, 'wb') as f:
         f.write(image_bytes)
+
+    # 在Docker环境中，同时保存到共享存储卷
+    copy_to_shared_storage(filepath, filename)
+
     return filepath
+
+
+def copy_to_shared_storage(source_path, filename):
+    """将文件复制到共享存储卷（Docker环境）"""
+    try:
+        # 检查是否在Docker环境中
+        shared_storage_path = '/storage/generated'
+        if os.path.exists('/storage'):
+            # 确保共享存储目录存在
+            os.makedirs(shared_storage_path, exist_ok=True)
+
+            # 复制文件到共享存储
+            import shutil
+            dest_path = os.path.join(shared_storage_path, filename)
+
+            # 检查源文件和目标文件是否是同一个文件
+            if os.path.abspath(source_path) != os.path.abspath(dest_path):
+                shutil.copy2(source_path, dest_path)
+                print(f"文件已复制到共享存储: {dest_path}")
+            else:
+                print(f"文件已在共享存储中: {dest_path}")
+        else:
+            print("非Docker环境，跳过共享存储复制")
+    except Exception as e:
+        # 在非Docker环境中，这个操作可能会失败，但不应该影响主要功能
+        print(f"复制到共享存储失败: {str(e)}")
+        pass
+
+
+def get_image_url(filename, subfolder='generated'):
+    """
+    生成正确的图像URL，支持Docker和本地环境
+
+    Args:
+        filename: 图像文件名
+        subfolder: 子文件夹名称 (generated, uploads等)
+
+    Returns:
+        str: 正确的图像URL路径
+    """
+    if not filename:
+        return ''
+
+    # 如果已经是完整的URL，直接返回
+    if filename.startswith('http://') or filename.startswith('https://'):
+        return filename
+
+    # 如果已经是正确的相对路径格式，直接返回
+    if filename.startswith(f'/storage/{subfolder}/'):
+        return filename
+
+    # 提取文件名（去除路径）
+    if '/' in filename or '\\' in filename:
+        filename = filename.split('/')[-1].split('\\')[-1]
+
+    # 构建标准的URL路径
+    return f"/storage/{subfolder}/{filename}"
 
 
 def draw_bounding_box(image_path, bbox_coords, output_path, label=None):
@@ -111,6 +172,11 @@ def draw_bounding_box(image_path, bbox_coords, output_path, label=None):
         image.save(output_path, 'JPEG', quality=95)
     else:
         image.save(output_path)
+
+    # 复制到共享存储
+    filename = os.path.basename(output_path)
+    copy_to_shared_storage(output_path, filename)
+
     return output_path
 
 
@@ -307,4 +373,9 @@ def draw_all_bounding_boxes(image_path, detected_objects, output_path):
         image.save(output_path, 'JPEG', quality=95)
     else:
         image.save(output_path)
+
+    # 复制到共享存储
+    filename = os.path.basename(output_path)
+    copy_to_shared_storage(output_path, filename)
+
     return output_path

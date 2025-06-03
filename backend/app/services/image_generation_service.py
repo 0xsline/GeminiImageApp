@@ -143,8 +143,11 @@ class ImageGenerationService:
                         current_app.config['GENERATED_FOLDER']
                     )
 
+                    # 使用统一的URL生成函数
+                    from ..utils.helpers import get_image_url
+                    image_url = get_image_url(image_filename, 'generated')
                     generated_images.append({
-                        'path': image_path,
+                        'path': image_url,
                         'filename': image_filename
                     })
 
@@ -168,9 +171,42 @@ class ImageGenerationService:
                 raise Exception("未生成任何图像")
 
         except Exception as imagen_api_error:
-            print(f"{model_name} API调用失败: {str(imagen_api_error)}")
-            # 如果API不可用，生成详细的创作方案
-            return self._generate_image_creation_plan(optimized_prompt, aspect_ratio, style)
+            error_str = str(imagen_api_error)
+            print(f"{model_name} API调用失败: {error_str}")
+
+            # 检查是否是API密钥相关错误
+            if ('API key not valid' in error_str or
+                'INVALID_ARGUMENT' in error_str or
+                '400' in error_str or
+                'API_KEY_INVALID' in error_str):
+                return {
+                    'success': False,
+                    'error': 'API密钥无效或已过期，请检查您的Google API密钥配置',
+                    'error_type': 'api_key_invalid'
+                }, 400
+
+            # 检查是否是认证错误
+            elif ('401' in error_str or
+                  'UNAUTHENTICATED' in error_str):
+                return {
+                    'success': False,
+                    'error': 'API认证失败，请检查您的API密钥',
+                    'error_type': 'authentication_failed'
+                }, 401
+
+            # 检查是否是配额限制错误
+            elif ('429' in error_str or
+                  'RESOURCE_EXHAUSTED' in error_str or
+                  'quota' in error_str.lower()):
+                return {
+                    'success': False,
+                    'error': 'API调用次数已达到限制，请稍后再试',
+                    'error_type': 'quota_exceeded'
+                }, 429
+
+            # 其他情况，生成详细的创作方案作为备选
+            else:
+                return self._generate_image_creation_plan(optimized_prompt, aspect_ratio, style)
 
     def _generate_with_gemini(self, model_id, optimized_prompt, aspect_ratio, style, num_images, model_name, original_prompt):
         """使用 Gemini 2.0 Flash 图像生成"""
@@ -212,8 +248,11 @@ class ImageGenerationService:
                                     current_app.config['GENERATED_FOLDER']
                                 )
 
+                                # 使用统一的URL生成函数
+                                from ..utils.helpers import get_image_url
+                                image_url = get_image_url(image_filename, 'generated')
                                 generated_images.append({
-                                    'path': image_path,
+                                    'path': image_url,
                                     'filename': image_filename
                                 })
 
@@ -240,9 +279,42 @@ class ImageGenerationService:
                 raise Exception("Gemini响应格式异常")
 
         except Exception as gemini_api_error:
-            print(f"{model_name} API调用失败: {str(gemini_api_error)}")
-            # 如果Gemini不可用，生成详细的创作方案
-            return self._generate_image_creation_plan(optimized_prompt, aspect_ratio, style)
+            error_str = str(gemini_api_error)
+            print(f"{model_name} API调用失败: {error_str}")
+
+            # 检查是否是API密钥相关错误
+            if ('API key not valid' in error_str or
+                'INVALID_ARGUMENT' in error_str or
+                '400' in error_str or
+                'API_KEY_INVALID' in error_str):
+                return {
+                    'success': False,
+                    'error': 'API密钥无效或已过期，请检查您的Google API密钥配置',
+                    'error_type': 'api_key_invalid'
+                }, 400
+
+            # 检查是否是认证错误
+            elif ('401' in error_str or
+                  'UNAUTHENTICATED' in error_str):
+                return {
+                    'success': False,
+                    'error': 'API认证失败，请检查您的API密钥',
+                    'error_type': 'authentication_failed'
+                }, 401
+
+            # 检查是否是配额限制错误
+            elif ('429' in error_str or
+                  'RESOURCE_EXHAUSTED' in error_str or
+                  'quota' in error_str.lower()):
+                return {
+                    'success': False,
+                    'error': 'API调用次数已达到限制，请稍后再试',
+                    'error_type': 'quota_exceeded'
+                }, 429
+
+            # 其他情况，生成详细的创作方案作为备选
+            else:
+                return self._generate_image_creation_plan(optimized_prompt, aspect_ratio, style)
 
     def edit_image(self, image_path, edit_prompt, mask_path=None, model_type='imagen-3.0-generate-002'):
         """
@@ -326,11 +398,14 @@ class ImageGenerationService:
                         current_app.config['GENERATED_FOLDER']
                     )
 
+                    # 使用统一的URL生成函数
+                    from ..utils.helpers import get_image_url
+                    edited_image_url = get_image_url(edited_filename, 'generated')
                     return {
                         'success': True,
                         'status': 'image_edited',
                         'message': '图像编辑成功！',
-                        'edited_image_path': edited_path,
+                        'edited_image_path': edited_image_url,
                         'original_image_path': image_path,
                         'edit_prompt': edit_prompt,
                         'optimized_prompt': optimized_prompt,

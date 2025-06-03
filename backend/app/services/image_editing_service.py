@@ -85,10 +85,14 @@ class ImageEditingService:
                     edited_images.append(output_path)
 
             if edited_images:
+                # 转换为URL路径
+                from ..utils.helpers import get_image_url
+                edited_image_urls = [get_image_url(os.path.basename(path), 'generated') for path in edited_images]
+
                 return {
                     'success': True,
                     'original_image': filepath,
-                    'edited_images': edited_images,
+                    'edited_images': edited_image_urls,
                     'edit_type': f'Gemini AI 编辑 ({gemini_model})',
                     'instruction': instruction
                 }, 200
@@ -254,10 +258,14 @@ class ImageEditingService:
         transformed_image.save(output_path)
         edited_images.append(output_path)
 
+        # 转换为URL路径
+        from ..utils.helpers import get_image_url
+        edited_image_urls = [get_image_url(os.path.basename(path), 'generated') for path in edited_images]
+
         return {
             'success': True,
             'original_image': filepath,
-            'edited_images': edited_images,
+            'edited_images': edited_image_urls,
             'edit_type': f'{transform_type} 变换',
             'parameters': edit_params
         }, 200

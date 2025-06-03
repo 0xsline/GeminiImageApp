@@ -152,11 +152,16 @@ class YOLODetectionService:
                 summary_path = os.path.join(current_app.config['GENERATED_FOLDER'], summary_filename)
                 cv2.imwrite(summary_path, summary_image)
 
+                # 使用统一的URL生成函数
+                from ..utils.helpers import get_image_url
+                relative_bbox_images = [get_image_url(os.path.basename(img), 'generated') for img in bbox_images]
+                relative_summary_image = get_image_url(os.path.basename(summary_path), 'generated')
+
                 return {
                     'success': True,
                     'detected_objects': detected_objects,
-                    'bbox_images': bbox_images,
-                    'summary_image': summary_path,
+                    'bbox_images': relative_bbox_images,
+                    'summary_image': relative_summary_image,
                     'method': f'YOLO {model_name}',
                     'model_name': model_name,
                     'total_objects': len(detected_objects)

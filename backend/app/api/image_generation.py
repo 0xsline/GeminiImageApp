@@ -11,10 +11,16 @@ from ..utils.helpers import init_gemini_client
 
 
 # 延迟初始化服务
-def get_image_generation_service():
+def get_image_generation_service(api_key=None):
     """获取图像生成服务实例"""
     try:
-        client = init_gemini_client()
+        if api_key:
+            # 使用用户提供的API key
+            from google import genai
+            client = genai.Client(api_key=api_key)
+        else:
+            # 使用默认配置的API key
+            client = init_gemini_client()
         return ImageGenerationService(client)
     except Exception as e:
         current_app.logger.error(f"初始化图像生成服务失败: {e}")
@@ -33,12 +39,15 @@ def image_generation():
     - style: 风格 (默认: realistic)
     """
     try:
+        # 获取用户API key
+        user_api_key = request.headers.get('X-API-Key')
+
         # 获取服务实例
-        service = get_image_generation_service()
+        service = get_image_generation_service(api_key=user_api_key)
         if not service:
             return jsonify({
                 'success': False,
-                'error': '服务初始化失败'
+                'error': '服务初始化失败，请检查API密钥是否正确'
             }), 500
 
         # 支持JSON和form数据

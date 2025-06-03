@@ -61,7 +61,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-2">宽高比</label>
               <select v-model="aspectRatio" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                 <option v-for="(ratioInfo, key) in availableRatios" :key="key" :value="key">
-                  {{ ratioInfo.name }} ({{ key }})
+                  {{ ratioInfo.name }}
                 </option>
               </select>
             </div>
@@ -258,13 +258,31 @@ export default {
 
     const getImageUrl = (imagePath) => {
       if (!imagePath) return ''
-      // 如果是绝对路径，转换为相对路径
-      if (imagePath.includes('/storage/generated/')) {
-        const filename = imagePath.split('/').pop()
+
+      // 如果是完整的URL，直接返回
+      if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+        return imagePath
+      }
+
+      // 如果已经是正确的相对路径格式，直接返回
+      if (imagePath.startsWith('/storage/generated/')) {
+        return imagePath
+      }
+
+      // 如果包含完整路径（Windows或Linux），提取文件名
+      if (imagePath.includes('storage') && (imagePath.includes('generated') || imagePath.includes('\\'))) {
+        const filename = imagePath.split(/[/\\]/).pop()
         return `/storage/generated/${filename}`
       }
-      // 如果已经是相对路径，直接使用
-      return imagePath.startsWith('/') ? imagePath : `/${imagePath}`
+
+      // 如果只是文件名，构建完整路径
+      if (!imagePath.includes('/') && !imagePath.includes('\\')) {
+        return `/storage/generated/${imagePath}`
+      }
+
+      // 默认情况：清理路径并构建
+      const filename = imagePath.split(/[/\\]/).pop()
+      return `/storage/generated/${filename}`
     }
 
     onMounted(() => {

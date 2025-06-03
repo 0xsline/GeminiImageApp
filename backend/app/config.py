@@ -21,10 +21,33 @@ class Config:
     GOOGLE_API_KEY = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
 
-    # 文件上传配置
-    UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'storage', 'uploads')
-    GENERATED_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'storage', 'generated')
-    MODELS_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'storage', 'models')
+    # 文件上传配置 - 支持Docker和本地环境
+    @property
+    def UPLOAD_FOLDER(self):
+        if os.path.exists('/storage'):
+            # Docker环境
+            return '/storage/uploads'
+        else:
+            # 本地环境
+            return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'storage', 'uploads')
+
+    @property
+    def GENERATED_FOLDER(self):
+        if os.path.exists('/storage'):
+            # Docker环境
+            return '/storage/generated'
+        else:
+            # 本地环境
+            return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'storage', 'generated')
+
+    @property
+    def MODELS_FOLDER(self):
+        if os.path.exists('/storage'):
+            # Docker环境
+            return '/storage/models'
+        else:
+            # 本地环境
+            return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'storage', 'models')
 
     # 文件大小限制 (16MB)
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
@@ -52,10 +75,25 @@ class Config:
     @staticmethod
     def init_app(app):
         """初始化应用配置"""
+        # 获取配置实例
+        config_instance = app.config.get('CONFIG_INSTANCE')
+        if not config_instance:
+            config_instance = Config()
+            app.config['CONFIG_INSTANCE'] = config_instance
+
         # 确保必要的目录存在
-        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-        os.makedirs(app.config['GENERATED_FOLDER'], exist_ok=True)
-        os.makedirs(app.config['MODELS_FOLDER'], exist_ok=True)
+        upload_folder = config_instance.UPLOAD_FOLDER
+        generated_folder = config_instance.GENERATED_FOLDER
+        models_folder = config_instance.MODELS_FOLDER
+
+        os.makedirs(upload_folder, exist_ok=True)
+        os.makedirs(generated_folder, exist_ok=True)
+        os.makedirs(models_folder, exist_ok=True)
+
+        # 更新app.config中的路径
+        app.config['UPLOAD_FOLDER'] = upload_folder
+        app.config['GENERATED_FOLDER'] = generated_folder
+        app.config['MODELS_FOLDER'] = models_folder
 
 
 class DevelopmentConfig(Config):

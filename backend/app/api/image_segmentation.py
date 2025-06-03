@@ -11,7 +11,7 @@ import base64
 import os
 
 
-def get_segmentation_services():
+def get_segmentation_services(api_key=None):
     """获取图像分割服务实例"""
     try:
         from ..services.image_segmentation_service import ImageSegmentationService
@@ -19,7 +19,14 @@ def get_segmentation_services():
         from ..services.yolo_segmentation_service import YOLOSegmentationService
         from ..utils.helpers import init_gemini_client
 
-        client = init_gemini_client()
+        if api_key:
+            # 使用用户提供的API key
+            from google import genai
+            client = genai.Client(api_key=api_key)
+        else:
+            # 使用默认配置的API key
+            client = init_gemini_client()
+
         return {
             'gemini': ImageSegmentationService(client),
             'opencv': OpenCVService(),
@@ -56,12 +63,15 @@ def image_segmentation():
     - object_name: 要分割的对象名称
     """
     try:
+        # 获取用户API key
+        user_api_key = request.headers.get('X-API-Key')
+
         # 获取服务实例
-        services = get_segmentation_services()
+        services = get_segmentation_services(api_key=user_api_key)
         if not services:
             return jsonify({
                 'success': False,
-                'error': '服务初始化失败'
+                'error': '服务初始化失败，请检查API密钥是否正确'
             }), 500
 
         # 支持JSON和form数据
@@ -107,12 +117,15 @@ def image_segmentation():
 def opencv_segmentation():
     """OpenCV 图像分割"""
     try:
+        # 获取用户API key
+        user_api_key = request.headers.get('X-API-Key')
+
         # 获取服务实例
-        services = get_segmentation_services()
+        services = get_segmentation_services(api_key=user_api_key)
         if not services:
             return jsonify({
                 'success': False,
-                'error': '服务初始化失败'
+                'error': '服务初始化失败，请检查API密钥是否正确'
             }), 500
 
         # 支持JSON和form数据
@@ -155,12 +168,15 @@ def opencv_segmentation():
 def yolo_segmentation():
     """YOLO 图像分割"""
     try:
+        # 获取用户API key
+        user_api_key = request.headers.get('X-API-Key')
+
         # 获取服务实例
-        services = get_segmentation_services()
+        services = get_segmentation_services(api_key=user_api_key)
         if not services:
             return jsonify({
                 'success': False,
-                'error': '服务初始化失败'
+                'error': '服务初始化失败，请检查API密钥是否正确'
             }), 500
 
         # 支持JSON和form数据
@@ -207,12 +223,15 @@ def yolo_segmentation():
 def compare_segmentation():
     """对比 Gemini、OpenCV 和 YOLO 的图像分割结果"""
     try:
+        # 获取用户API key
+        user_api_key = request.headers.get('X-API-Key')
+
         # 获取服务实例
-        services = get_segmentation_services()
+        services = get_segmentation_services(api_key=user_api_key)
         if not services:
             return jsonify({
                 'success': False,
-                'error': '服务初始化失败'
+                'error': '服务初始化失败，请检查API密钥是否正确'
             }), 500
 
         # 支持JSON和form数据
@@ -340,11 +359,14 @@ def compare_segmentation():
 def get_yolo_segmentation_models():
     """获取可用的YOLO分割模型列表"""
     try:
-        services = get_segmentation_services()
+        # 获取用户API key
+        user_api_key = request.headers.get('X-API-Key')
+
+        services = get_segmentation_services(api_key=user_api_key)
         if not services:
             return jsonify({
                 'success': False,
-                'error': '服务初始化失败'
+                'error': '服务初始化失败，请检查API密钥是否正确'
             }), 500
 
         models = services['yolo'].get_available_models()

@@ -149,12 +149,15 @@ class ImageSegmentationService:
                     # 使用边界框创建分割图像
                     create_segment_image(filepath, bbox, seg_filepath, label)
 
+                    # 使用统一的URL生成函数
+                    from ..utils.helpers import get_image_url
+                    relative_seg_path = get_image_url(seg_filename, 'generated')
                     segmented_objects.append({
                         'label': label,
                         'description': description,
                         'confidence': confidence,
                         'bbox': bbox,
-                        'segment_image': seg_filepath
+                        'segment_image': relative_seg_path
                     })
                     segment_images.append(seg_filepath)
 

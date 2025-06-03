@@ -17,6 +17,22 @@ class ApiService {
   }
 
   /**
+   * 获取用户保存的API密钥
+   */
+  getUserApiKey() {
+    try {
+      const settings = localStorage.getItem('gemini-app-settings')
+      if (settings) {
+        const parsed = JSON.parse(settings)
+        return parsed.apiKey || null
+      }
+    } catch (error) {
+      console.warn('获取API密钥失败:', error)
+    }
+    return null
+  }
+
+  /**
    * 发送HTTP请求的通用方法
    */
   async request(url, options = {}) {
@@ -32,6 +48,12 @@ class ApiService {
     // 如果是FormData，移除Content-Type让浏览器自动设置
     if (config.body instanceof FormData) {
       delete config.headers['Content-Type']
+    }
+
+    // 添加用户API密钥到请求头
+    const userApiKey = this.getUserApiKey()
+    if (userApiKey) {
+      config.headers['X-API-Key'] = userApiKey
     }
 
     try {
