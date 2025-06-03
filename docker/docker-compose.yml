@@ -1,0 +1,139 @@
+services:
+  # 后端 Flask API 服务
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    image: gemini-backend:latest
+    container_name: gemini-backend
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+      - HOST=0.0.0.0
+      - PORT=5005
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ../storage:/storage
+      - storage_shared:/var/www/storage  # 添加共享存储卷
+      - backend_cache:/root/.cache
+      - backend_logs:/app/logs
+    ports:
+      - "5005:5005"
+    networks:
+      - gemini-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5005/api/features"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # 前端 Vue.js 应用
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    image: gemini-frontend:latest
+    container_name: gemini-frontend
+    restart: unless-stopped
+    volumes:
+      - storage_shared:/var/www/storage  # 添加共享存储卷
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - gemini-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Nginx 反向代理
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: gemini-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../storage:/var/www/storage:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    networks:
+      - gemini-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+# 网络配置
+networks:
+  gemini-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+    driver_opts:
+      com.docker.network.bridge.name: gemini-br0
+
+# 数据卷配置
+volumes:
+  backend_cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./volumes/backend_cache
+  backend_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./volumes/backend_logs
+  nginx_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./volumes/nginx_logs
+  storage_shared:  # 添加共享存储卷
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ../storage

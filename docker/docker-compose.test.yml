@@ -1,0 +1,70 @@
+services:
+  # 后端 Flask API 服务
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    image: gemini-backend:latest
+    container_name: gemini-backend-test
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=development
+      - HOST=0.0.0.0
+      - PORT=5005
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ../storage:/storage
+      - storage_shared:/var/www/storage  # 添加共享存储卷
+      - backend_cache:/root/.cache
+      - backend_logs:/app/logs
+    ports:
+      - "5005:5005"
+    networks:
+      - gemini-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5005/api/features"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # 前端 Vue.js 应用
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    image: gemini-frontend:latest
+    container_name: gemini-frontend-test
+    restart: unless-stopped
+    volumes:
+      - storage_shared:/var/www/storage  # 添加共享存储卷
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - gemini-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# 网络配置
+networks:
+  gemini-network:
+    driver: bridge
+
+# 数据卷配置
+volumes:
+  backend_cache:
+    driver: local
+  backend_logs:
+    driver: local
+  storage_shared:  # 添加共享存储卷
+    driver: local

@@ -1,0 +1,54 @@
+# 多阶段构建 - 构建阶段
+FROM node:18-alpine AS builder
+
+# 设置工作目录
+WORKDIR /app
+
+# 配置 Alpine 使用阿里云镜像源（2025年最新）
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
+
+# 安装必要的构建工具
+RUN apk add --no-cache python3 make g++
+
+# 设置 npm 使用淘宝镜像源（2025年最新）
+RUN npm config set registry https://registry.npmmirror.com/
+
+# 复制 package.json 和 package-lock.json
+COPY frontend/package*.json ./
+
+# 安装依赖（包括开发依赖，用于构建）
+RUN npm ci --silent
+
+# 复制前端源代码
+COPY frontend/ .
+
+# 构建生产版本
+RUN npm run build
+
+# 生产阶段 - 使用官方 Nginx 服务静态文件
+FROM nginx:1.25-alpine
+
+# 配置 Alpine 使用阿里云镜像源（2025年最新）
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
+
+# 安装 curl 用于健康检查
+RUN apk add --no-cache curl
+
+# 复制构建好的文件到 Nginx 目录
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# 复制 Nginx 配置文件
+COPY docker/nginx-frontend.conf /etc/nginx/conf.d/default.conf
+
+# 设置目录权限
+RUN chmod -R 755 /usr/share/nginx/html
+
+# 暴露端口
+EXPOSE 80
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost/ || exit 1
+
+# 启动 Nginx
+CMD ["nginx", "-g", "daemon off;"]

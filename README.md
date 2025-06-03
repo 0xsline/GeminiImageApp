@@ -164,7 +164,126 @@ npm run dev
 
 🎉 **恭喜！** 您的 Gemini Image App 已经运行起来了！
 
-## 📁 项目结构
+## 🐳 Docker 部署
+
+### 📦 Docker 快速启动
+
+如果您更喜欢使用 Docker 部署，我们提供了完整的容器化解决方案：
+
+#### 🚀 一键启动（推荐）
+
+**Windows 用户:**
+```bash
+cd docker
+docker-start.bat
+```
+
+**Linux/Mac 用户:**
+```bash
+cd docker
+chmod +x docker-start.sh
+./docker-start.sh
+```
+
+#### 🌐 访问地址
+
+启动完成后，您可以通过以下地址访问应用：
+
+| 地址 | 服务 | 说明 | 推荐度 |
+|------|------|------|--------|
+| **http://localhost** | Nginx 代理 | 🌟 生产环境入口，负载均衡 | ⭐⭐⭐⭐⭐ |
+| http://localhost:3000 | 前端直连 | 🎨 开发调试用 | ⭐⭐⭐ |
+| http://localhost:5005 | 后端 API | 🔧 API 测试用 | ⭐⭐ |
+
+#### 🔧 手动部署
+
+如果您需要更多控制，可以手动执行以下步骤：
+
+```bash
+# 1. 配置环境变量
+cp .env.example .env
+# 编辑 .env 文件，设置您的 Google API Key
+
+# 2. 进入 Docker 目录
+cd docker
+
+# 3. 启动所有服务
+docker-compose up -d
+
+# 4. 查看服务状态
+docker-compose ps
+
+# 5. 查看日志
+docker-compose logs -f
+```
+
+### 🏗️ Docker 架构
+
+我们的 Docker 部署包含以下组件：
+
+```mermaid
+graph TB
+    subgraph "Docker 容器"
+        A[Nginx 反向代理<br/>:80] --> B[Vue.js 前端<br/>:3000]
+        A --> C[Flask 后端<br/>:5005]
+        B -.-> C
+    end
+
+    subgraph "存储卷"
+        D[storage_shared<br/>共享存储]
+        E[backend_cache<br/>后端缓存]
+        F[nginx_logs<br/>访问日志]
+    end
+
+    A --- D
+    B --- D
+    C --- D
+    C --- E
+    A --- F
+```
+
+### 🛠️ Docker 管理命令
+
+```bash
+# 启动服务
+docker-compose up -d
+
+# 停止服务
+docker-compose down
+
+# 重启服务
+docker-compose restart
+
+# 查看状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs -f
+
+# 重新构建
+docker-compose up --build -d
+
+# 清理资源
+docker-compose down -v
+docker system prune -a
+```
+
+### 🔧 国内镜像源优化
+
+项目已针对中国用户进行网络优化：
+
+- **🐳 Docker 镜像源**: https://docker.aityp.com/s/docker.io
+- **🐍 Python pip**: 清华大学镜像源
+- **📦 Node.js npm**: 淘宝镜像源
+
+### 📖 详细文档
+
+更多 Docker 部署细节，请参考：
+- **📋 详细指南**: [docker/README.md](docker/README.md)
+- **🛠️ 故障排除**: [docker/README.md#故障排除](docker/README.md#故障排除)
+- **⚙️ 高级配置**: [docker/README.md#高级配置](docker/README.md#高级配置)
+
+## �📁 项目结构
 
 ```
 gemini-image-app/
