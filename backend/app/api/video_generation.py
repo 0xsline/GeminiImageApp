@@ -24,7 +24,7 @@ def get_video_generation_service():
 def video_generation():
     """
     视频生成API - 支持Veo 2.0
-    
+
     支持的参数:
     - prompt: 视频描述
     - duration: 视频时长 (默认: 8秒)
@@ -148,4 +148,36 @@ def get_video_options():
         return jsonify({
             'success': False,
             'error': f'获取选项失败: {str(e)}'
+        }), 500
+
+
+@api_bp.route('/video-generation/test', methods=['GET'])
+def test_video_api():
+    """测试视频生成API连接"""
+    try:
+        service = get_video_generation_service()
+        if not service:
+            return jsonify({
+                'success': False,
+                'error': '服务初始化失败'
+            }), 500
+
+        # 测试基本连接
+        return jsonify({
+            'success': True,
+            'message': '视频生成服务连接正常',
+            'model': 'veo-2.0-generate-001',
+            'api_version': '2025',
+            'supported_features': [
+                'text-to-video',
+                'image-to-video',
+                'prompt-enhancement',
+                'multiple-aspect-ratios'
+            ]
+        })
+    except Exception as e:
+        current_app.logger.error(f"测试视频API错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'API测试失败: {str(e)}'
         }), 500

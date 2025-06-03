@@ -177,11 +177,11 @@ class ApiService {
   }
 
   async generateVideoFromImage(formData) {
-    return this.post('/video-from-image', formData)
+    return this.post('/video-generation/from-image', formData)
   }
 
   async getVideoOptions() {
-    return this.get('/video-options')
+    return this.get('/video-generation/options')
   }
 
   // 工具API

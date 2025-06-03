@@ -4,7 +4,6 @@
 """
 import os
 import time
-import base64
 from google import genai
 from google.genai import types
 from ..utils.helpers import save_generated_image
@@ -79,14 +78,14 @@ class VideoGenerationService:
 
             # 使用最新的Veo 2.0 API调用方式
             try:
-                # 根据最新官方文档使用正确的API调用方式
+                # 根据2025年最新官方文档使用正确的API调用方式
                 operation = self.client.models.generate_videos(
                     model="veo-2.0-generate-001",
                     prompt=optimized_prompt,
                     config=types.GenerateVideosConfig(
                         person_generation="dont_allow",  # 安全设置
                         aspect_ratio=aspect_ratio,  # "16:9" 或 "9:16"
-                        duration_seconds=duration,  # 5-8秒
+                        duration_seconds=min(duration, 8),  # 最大8秒
                         number_of_videos=1,
                         enhance_prompt=True,  # 启用提示词增强
                     ),
@@ -119,9 +118,21 @@ class VideoGenerationService:
                             video_filepath = os.path.join(current_app.config['GENERATED_FOLDER'], video_filename)
 
                             try:
-                                # 根据官方示例下载和保存视频
-                                self.client.files.download(file=video)
-                                video.save(video_filepath)
+                                # 根据2025年最新API文档下载和保存视频
+                                # 获取视频的URI或直接保存
+                                if hasattr(video, 'uri'):
+                                    # 如果有URI，下载视频内容
+                                    video_data = self.client.files.download(video.uri)
+                                    with open(video_filepath, 'wb') as f:
+                                        f.write(video_data)
+                                elif hasattr(video, 'save'):
+                                    # 如果有save方法，直接保存
+                                    video.save(video_filepath)
+                                else:
+                                    # 其他情况，尝试获取视频数据
+                                    print(f"视频对象类型: {type(video)}")
+                                    print(f"视频对象属性: {dir(video)}")
+                                    raise Exception("无法确定视频保存方法")
 
                                 # 生成预览图
                                 preview_image_path = self._generate_preview_image(prompt, style)
@@ -131,6 +142,7 @@ class VideoGenerationService:
                                     'status': 'video_generated',
                                     'message': '视频生成成功！',
                                     'video_path': video_filepath,
+                                    'video_filename': video_filename,
                                     'preview_image': preview_image_path,
                                     'original_prompt': prompt,
                                     'optimized_prompt': optimized_prompt,
@@ -147,8 +159,13 @@ class VideoGenerationService:
                                 return {
                                     'success': True,
                                     'status': 'video_generated',
-                                    'message': '视频生成成功，但保存失败',
-                                    'video_info': str(video),
+                                    'message': '视频生成成功，但本地保存失败',
+                                    'video_info': {
+                                        'type': str(type(video)),
+                                        'attributes': [attr for attr in dir(video) if not attr.startswith('_')],
+                                        'uri': getattr(video, 'uri', 'N/A'),
+                                        'name': getattr(video, 'name', 'N/A')
+                                    },
                                     'original_prompt': prompt,
                                     'optimized_prompt': optimized_prompt,
                                     'duration': duration,
@@ -227,7 +244,7 @@ class VideoGenerationService:
                 generated_videos = operation.response.generated_videos
                 if generated_videos and len(generated_videos) > 0:
                     video = generated_videos[0].video
-                    
+
                     timestamp = int(time.time())
                     video_filename = f"veo2_image_to_video_{timestamp}.mp4"
                     video_filepath = os.path.join(current_app.config['GENERATED_FOLDER'], video_filename)
@@ -386,7 +403,7 @@ class VideoGenerationService:
         try:
             # 使用Imagen生成预览图
             preview_prompt = f"A single frame preview of: {prompt}, {style} style, high quality, detailed"
-            
+
             response = self.client.models.generate_images(
                 model="imagen-3.0-generate-001",
                 prompt=preview_prompt,
@@ -408,7 +425,7 @@ class VideoGenerationService:
 
         except Exception as e:
             print(f"生成预览图失败: {str(e)}")
-            
+
         return None
 
 
