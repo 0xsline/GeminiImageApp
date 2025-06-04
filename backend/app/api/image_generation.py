@@ -7,7 +7,7 @@
 from flask import request, jsonify, current_app
 from . import api_bp
 from ..services.image_generation_service import ImageGenerationService
-from ..utils.helpers import init_gemini_client
+from ..utils.helpers import init_gemini_client, handle_api_error
 
 
 # 延迟初始化服务
@@ -47,8 +47,9 @@ def image_generation():
         if not service:
             return jsonify({
                 'success': False,
-                'error': '服务初始化失败，请检查API密钥是否正确'
-            }), 500
+                'error': '服务初始化失败，请检查API密钥是否正确',
+                'suggestion': '请确认API密钥是否有效，或联系管理员'
+            }), 400
 
         # 支持JSON和form数据
         if request.is_json:
@@ -76,10 +77,8 @@ def image_generation():
 
     except Exception as e:
         current_app.logger.error(f"图像生成API错误: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': f'图像生成失败: {str(e)}'
-        }), 500
+        error_response, status_code = handle_api_error(e, "图像生成")
+        return jsonify(error_response), status_code
 
 
 @api_bp.route('/image-generation/models', methods=['GET'])
@@ -90,8 +89,9 @@ def get_image_generation_models():
         if not service:
             return jsonify({
                 'success': False,
-                'error': '服务初始化失败'
-            }), 500
+                'error': '服务初始化失败，请检查API密钥是否正确',
+                'suggestion': '请确认API密钥是否有效，或联系管理员'
+            }), 400
 
         models = service.get_model_options()
         return jsonify({
@@ -101,10 +101,8 @@ def get_image_generation_models():
         })
     except Exception as e:
         current_app.logger.error(f"获取生成模型列表错误: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': f'获取模型列表失败: {str(e)}'
-        }), 500
+        error_response, status_code = handle_api_error(e, "获取模型列表")
+        return jsonify(error_response), status_code
 
 
 @api_bp.route('/image-generation/options', methods=['GET'])

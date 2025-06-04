@@ -177,6 +177,7 @@ export default {
         }
       } catch (error) {
         console.error('加载模型失败:', error)
+        // 静默处理，不显示错误消息，因为这不是用户主动操作
       }
     }
 
@@ -231,7 +232,16 @@ export default {
         }
       } catch (error) {
         console.error('处理失败:', error)
-        ElMessage.error(error.message || '处理失败，请重试')
+
+        // 优先显示后端返回的友好错误信息
+        let errorMessage = error.message || '处理失败，请重试'
+
+        // 如果有建议信息，添加到错误消息中
+        if (error.suggestion) {
+          errorMessage += `\n建议：${error.suggestion}`
+        }
+
+        ElMessage.error(errorMessage)
       } finally {
         loading.value = false
       }

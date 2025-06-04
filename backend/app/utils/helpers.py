@@ -13,7 +13,7 @@ from io import BytesIO
 import numpy as np
 from google import genai
 from google.genai import types
-from flask import current_app
+from flask import current_app, request
 
 
 def allowed_file(filename):
@@ -309,7 +309,114 @@ def translate_chinese_to_english(chinese_text, client):
 
 def init_gemini_client():
     """初始化 Gemini 客户端"""
-    return genai.Client(api_key=current_app.config['GOOGLE_API_KEY'])
+    # 首先尝试从环境变量获取API密钥
+    api_key = current_app.config.get('GOOGLE_API_KEY')
+
+    if not api_key:
+        api_key = current_app.config.get('GEMINI_API_KEY')
+
+    # 如果环境变量中没有API密钥，则从请求头中获取用户提供的密钥
+    if not api_key:
+        api_key = request.headers.get('X-API-Key')
+    print("API_KEY",api_key)
+    if not api_key:
+        raise ValueError("未找到有效的API密钥，请在环境变量中设置GEMINI_API_KEY或在请求头中提供X-API-Key")
+
+    return genai.Client(api_key=api_key)
+
+
+def handle_api_error(error, operation_name="操作"):
+    """
+    统一处理API错误，返回友好的错误消息和适当的状态码
+
+    Args:
+        error: 异常对象
+        operation_name: 操作名称，用于错误消息
+
+    Returns:
+        tuple: (error_response_dict, status_code)
+    """
+    error_str = str(error)
+    print(f"{operation_name}错误: {error}")
+
+    # API密钥相关错误
+    if ('API key not valid' in error_str or
+        'INVALID_ARGUMENT' in error_str or
+        'API_KEY_INVALID' in error_str or
+        '400' in error_str and 'key' in error_str.lower()):
+        return {
+            'success': False,
+            'error': 'API密钥无效或已过期，请检查您的Google API密钥配置',
+            'error_type': 'api_key_invalid',
+            'suggestion': '请确认API密钥是否正确，或尝试重新生成API密钥'
+        }, 400
+
+    # 认证错误
+    elif ('401' in error_str or
+          'UNAUTHENTICATED' in error_str or
+          'authentication' in error_str.lower()):
+        return {
+            'success': False,
+            'error': 'API认证失败，请检查您的API密钥',
+            'error_type': 'authentication_failed',
+            'suggestion': '请确认API密钥是否有效，或联系管理员'
+        }, 400
+
+    # 配额限制错误
+    elif ('429' in error_str or
+          'RESOURCE_EXHAUSTED' in error_str or
+          'quota' in error_str.lower() or
+          'rate limit' in error_str.lower()):
+        return {
+            'success': False,
+            'error': 'API调用次数已达到限制，请稍后再试',
+            'error_type': 'quota_exceeded',
+            'suggestion': '请等待一段时间后重试，或检查API配额设置'
+        }, 400
+
+    # 网络连接错误
+    elif ('connection' in error_str.lower() or
+          'network' in error_str.lower() or
+          'timeout' in error_str.lower() or
+          'ConnectTimeout' in error_str):
+        return {
+            'success': False,
+            'error': '网络连接失败，请检查网络连接后重试',
+            'error_type': 'network_error',
+            'suggestion': '请检查网络连接，或稍后重试'
+        }, 400
+
+    # 服务不可用错误
+    elif ('503' in error_str or
+          'SERVICE_UNAVAILABLE' in error_str or
+          'service unavailable' in error_str.lower()):
+        return {
+            'success': False,
+            'error': '服务暂时不可用，请稍后重试',
+            'error_type': 'service_unavailable',
+            'suggestion': '服务可能正在维护，请稍后重试'
+        }, 400
+
+    # 内容安全策略错误
+    elif ('SAFETY' in error_str or
+          'safety' in error_str.lower() or
+          'content policy' in error_str.lower()):
+        return {
+            'success': False,
+            'error': '内容不符合安全策略，请修改后重试',
+            'error_type': 'content_policy_violation',
+            'suggestion': '请检查输入内容是否包含不当信息，并进行修改'
+        }, 400
+
+    # 其他未知错误 - 返回友好的通用错误消息
+    else:
+        return {
+            'success': False,
+            'error': f'{operation_name}暂时失败，请稍后重试',
+            'error_type': 'unknown_error',
+            'suggestion': '如果问题持续存在，请联系技术支持',
+            'technical_details': error_str if current_app.debug else None
+        }, 400
 
 
 def draw_all_bounding_boxes(image_path, detected_objects, output_path):

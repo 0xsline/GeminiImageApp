@@ -59,16 +59,32 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}${url}`, config)
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
       const contentType = response.headers.get('content-type')
       let data
       if (contentType && contentType.includes('application/json')) {
         data = await response.json()
       } else {
         data = await response.text()
+      }
+
+      if (!response.ok) {
+        // 创建包含详细错误信息的错误对象
+        const error = new Error()
+
+        if (typeof data === 'object' && data.error) {
+          // 后端返回了友好的错误信息
+          error.message = data.error
+          error.suggestion = data.suggestion
+          error.errorType = data.error_type
+          error.statusCode = response.status
+          error.backendError = data
+        } else {
+          // 使用默认的HTTP错误信息
+          error.message = `HTTP ${response.status}: ${response.statusText}`
+          error.statusCode = response.status
+        }
+
+        throw error
       }
 
       // 返回axios风格的响应对象

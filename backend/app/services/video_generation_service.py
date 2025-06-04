@@ -1,12 +1,13 @@
 """
 视频生成服务
 使用 Veo 2.0 模型生成视频内容
+优化版本：支持本地文件处理，避免不必要的文件上传
 """
 import os
 import time
 from google import genai
 from google.genai import types
-from ..utils.helpers import save_generated_image
+from ..utils.helpers import save_generated_image, init_gemini_client, handle_api_error
 from flask import current_app
 
 
@@ -14,8 +15,8 @@ class VideoGenerationService:
     def __init__(self, client=None):
         """初始化视频生成服务"""
         if client is None:
-            # 如果没有提供client，创建一个新的
-            self.client = genai.Client(api_key=current_app.config['GEMINI_API_KEY'])
+            # 如果没有提供client，使用统一的客户端初始化方法
+            self.client = init_gemini_client()
         else:
             self.client = client
 
@@ -64,7 +65,7 @@ class VideoGenerationService:
                 'optimized_prompt': user_prompt
             }
 
-    def generate_video(self, prompt, duration=8, style="realistic", aspect_ratio="16:9"):
+    def generate_video(self, prompt, duration=8, style="realistic", aspect_ratio="16:9", negative_prompt=""):
         """
         生成视频 - 使用 Veo 2.0 视频生成模型
         """
@@ -76,18 +77,28 @@ class VideoGenerationService:
             print(f"正在调用Veo 2.0视频生成API...")
             print(f"优化后的提示词: {optimized_prompt}")
 
-            # 使用最新的Veo 2.0 API调用方式
+            # 记录开始时间
+            start_time = time.time()
+
+            # 使用官方cookbook文档的正确API调用方式
             try:
-                # 根据2025年最新官方文档使用正确的API调用方式
+                # 根据官方Get_started_Veo.ipynb文档使用正确的API调用方式
+                # 构建负面提示词
+                final_negative_prompt = negative_prompt.strip() if negative_prompt else ""
+                if final_negative_prompt:
+                    final_negative_prompt += ", ugly, low quality, blurry, distorted"
+                else:
+                    final_negative_prompt = "ugly, low quality, blurry, distorted"
+
                 operation = self.client.models.generate_videos(
                     model="veo-2.0-generate-001",
                     prompt=optimized_prompt,
                     config=types.GenerateVideosConfig(
-                        person_generation="dont_allow",  # 安全设置
+                        person_generation="dont_allow",  # 安全设置：不允许生成人物
                         aspect_ratio=aspect_ratio,  # "16:9" 或 "9:16"
-                        duration_seconds=min(duration, 8),  # 最大8秒
-                        number_of_videos=1,
-                        enhance_prompt=True,  # 启用提示词增强
+                        number_of_videos=1,  # 生成视频数量 (1-4)
+                        duration_seconds=min(duration, 8),  # 视频时长 (5-8秒)
+                        negative_prompt=final_negative_prompt,  # 负面提示词
                     ),
                 )
 
@@ -106,33 +117,33 @@ class VideoGenerationService:
 
                 # 检查生成结果
                 if operation.done:
-                    if hasattr(operation, 'response') and operation.response:
-                        generated_videos = operation.response.generated_videos
+                    if hasattr(operation, 'result') and operation.result:
+                        generated_videos = operation.result.generated_videos
                         if generated_videos and len(generated_videos) > 0:
                             # 获取第一个生成的视频
-                            video = generated_videos[0].video
+                            generated_video = generated_videos[0]
+                            video = generated_video.video
 
-                            # 下载视频文件
+                            # 下载视频文件到本地
                             timestamp = int(time.time())
                             video_filename = f"veo2_generated_video_{timestamp}.mp4"
                             video_filepath = os.path.join(current_app.config['GENERATED_FOLDER'], video_filename)
 
                             try:
-                                # 根据2025年最新API文档下载和保存视频
-                                # 获取视频的URI或直接保存
-                                if hasattr(video, 'uri'):
-                                    # 如果有URI，下载视频内容
-                                    video_data = self.client.files.download(video.uri)
-                                    with open(video_filepath, 'wb') as f:
-                                        f.write(video_data)
-                                elif hasattr(video, 'save'):
-                                    # 如果有save方法，直接保存
-                                    video.save(video_filepath)
-                                else:
-                                    # 其他情况，尝试获取视频数据
-                                    print(f"视频对象类型: {type(video)}")
-                                    print(f"视频对象属性: {dir(video)}")
-                                    raise Exception("无法确定视频保存方法")
+                                # 确保目录存在
+                                os.makedirs(current_app.config['GENERATED_FOLDER'], exist_ok=True)
+
+                                # 根据官方cookbook示例的正确方式下载和保存视频
+                                video_content = self.client.files.download(file=video)
+
+                                # 将视频内容写入本地文件
+                                with open(video_filepath, 'wb') as f:
+                                    f.write(video_content)
+
+                                # 检查文件是否成功保存
+                                if os.path.exists(video_filepath):
+                                    file_size = os.path.getsize(video_filepath)
+                                    print(f"视频保存成功: {video_filepath}, 大小: {file_size} bytes")
 
                                 # 生成预览图
                                 preview_image_path = self._generate_preview_image(prompt, style)
@@ -141,8 +152,10 @@ class VideoGenerationService:
                                     'success': True,
                                     'status': 'video_generated',
                                     'message': '视频生成成功！',
-                                    'video_path': video_filepath,
+                                    'video_path': f"storage/generated/{video_filename}",
                                     'video_filename': video_filename,
+                                    'local_path': video_filepath,
+                                    'file_size': f"{file_size / 1024 / 1024:.2f} MB" if os.path.exists(video_filepath) else "未知",
                                     'preview_image': preview_image_path,
                                     'original_prompt': prompt,
                                     'optimized_prompt': optimized_prompt,
@@ -150,7 +163,8 @@ class VideoGenerationService:
                                     'style': style,
                                     'aspect_ratio': aspect_ratio,
                                     'model': 'Veo 2.0',
-                                    'note': 'Veo 2.0 视频生成完成'
+                                    'generation_time': f"{time.time() - start_time:.1f}秒",
+                                    'note': 'Veo 2.0 视频生成完成，已保存到本地'
                                 }, 200
 
                             except Exception as download_error:
@@ -185,22 +199,28 @@ class VideoGenerationService:
 
             except Exception as video_api_error:
                 print(f"Veo 2.0 API调用失败: {str(video_api_error)}")
-                # 如果Veo 2.0不可用，生成详细的制作方案
+                # 使用统一的错误处理
+                error_response, status_code = handle_api_error(video_api_error, "视频生成")
+                # 如果是API相关错误，直接返回错误信息
+                if status_code == 400:
+                    return error_response, status_code
+                # 如果是其他错误，生成详细的制作方案作为备选
                 return self._generate_enhanced_video_plan(optimized_prompt, duration, style, aspect_ratio)
 
         except Exception as e:
-            error_msg = f"视频生成失败: {str(e)}"
-            print(error_msg)
-            return {
-                'success': False,
-                'error': error_msg
-            }, 500
+            # 使用统一的错误处理
+            error_response, status_code = handle_api_error(e, "视频生成")
+            return error_response, status_code
 
     def generate_video_from_image(self, image_path, prompt="", duration=8, aspect_ratio="16:9"):
         """
-        从图像生成视频 - 图像到视频功能
+        从本地图像生成视频 - 优化版本，避免上传文件
         """
         try:
+            # 检查本地图像文件是否存在
+            if not os.path.exists(image_path):
+                raise Exception(f"图像文件不存在: {image_path}")
+
             # 优化提示词
             if prompt:
                 prompt_optimization = self.optimize_prompt(prompt)
@@ -208,28 +228,50 @@ class VideoGenerationService:
             else:
                 optimized_prompt = "Animate this image with natural motion and cinematic quality"
 
-            print(f"正在从图像生成视频...")
+            print(f"正在从本地图像生成视频...")
+            print(f"图像路径: {image_path}")
             print(f"提示词: {optimized_prompt}")
 
-            # 读取图像
+            # 读取本地图像文件
             from PIL import Image
-            image = Image.open(image_path)
+            import io
 
-            # 使用图像到视频API
+            # 使用PIL打开图像
+            with Image.open(image_path) as image:
+                # 如果图像是RGBA模式，转换为RGB
+                if image.mode == 'RGBA':
+                    # 创建白色背景
+                    background = Image.new('RGB', image.size, (255, 255, 255))
+                    background.paste(image, mask=image.split()[-1])  # 使用alpha通道作为mask
+                    image = background
+                elif image.mode != 'RGB':
+                    image = image.convert('RGB')
+
+                # 将图像转换为bytes格式
+                image_bytes_io = io.BytesIO()
+                image.save(image_bytes_io, format='JPEG', quality=95)
+                image_bytes = image_bytes_io.getvalue()
+
+            # 使用Veo 2.0的图像到视频API
             operation = self.client.models.generate_videos(
                 model="veo-2.0-generate-001",
                 prompt=optimized_prompt,
-                image=image,
+                image=types.Image(
+                    image_bytes=image_bytes,
+                    mime_type="image/jpeg"
+                ),
                 config=types.GenerateVideosConfig(
                     person_generation="dont_allow",
                     aspect_ratio=aspect_ratio,
-                    duration_seconds=duration,
                     number_of_videos=1,
-                    enhance_prompt=True,
+                    duration_seconds=duration,
+                    negative_prompt="ugly, low quality, blurry, distorted",
                 ),
             )
 
-            # 等待完成（与上面相同的逻辑）
+            print(f"图像到视频生成操作已启动: {operation.name}")
+
+            # 等待完成（与文本到视频相同的逻辑）
             max_wait_time = 600
             wait_time = 0
             poll_interval = 20
@@ -240,48 +282,86 @@ class VideoGenerationService:
                 wait_time += poll_interval
                 operation = self.client.operations.get(operation)
 
-            if operation.done and hasattr(operation, 'response') and operation.response:
-                generated_videos = operation.response.generated_videos
+            if operation.done and hasattr(operation, 'result') and operation.result:
+                generated_videos = operation.result.generated_videos
                 if generated_videos and len(generated_videos) > 0:
-                    video = generated_videos[0].video
+                    generated_video = generated_videos[0]
+                    video = generated_video.video
 
                     timestamp = int(time.time())
                     video_filename = f"veo2_image_to_video_{timestamp}.mp4"
                     video_filepath = os.path.join(current_app.config['GENERATED_FOLDER'], video_filename)
 
                     try:
-                        self.client.files.download(file=video)
-                        video.save(video_filepath)
+                        # 确保目录存在
+                        os.makedirs(current_app.config['GENERATED_FOLDER'], exist_ok=True)
+
+                        # 下载视频内容
+                        video_content = self.client.files.download(file=video)
+
+                        # 将视频内容写入本地文件
+                        with open(video_filepath, 'wb') as f:
+                            f.write(video_content)
+
+                        if os.path.exists(video_filepath):
+                            file_size = os.path.getsize(video_filepath)
+                            print(f"图像到视频保存成功: {video_filepath}, 大小: {file_size} bytes")
 
                         return {
                             'success': True,
                             'status': 'video_generated',
-                            'message': '从图像生成视频成功！',
-                            'video_path': video_filepath,
+                            'message': '从本地图像生成视频成功！',
+                            'video_path': f"storage/generated/{video_filename}",
+                            'video_filename': video_filename,
+                            'local_path': video_filepath,
                             'source_image': image_path,
+                            'file_size': f"{file_size / 1024 / 1024:.2f} MB",
                             'original_prompt': prompt,
                             'optimized_prompt': optimized_prompt,
                             'duration': duration,
                             'aspect_ratio': aspect_ratio,
                             'model': 'Veo 2.0 Image-to-Video',
+                            'note': '基于本地图像的视频生成，无需上传'
                         }, 200
 
                     except Exception as download_error:
-                        return {
-                            'success': False,
-                            'error': f'视频保存失败: {str(download_error)}'
-                        }, 500
-
-            # 如果失败，返回制作方案
-            return self._generate_enhanced_video_plan(optimized_prompt, duration, "image-to-video", aspect_ratio)
+                        error_response, status_code = handle_api_error(download_error, "视频保存")
+                        return error_response, status_code
+                else:
+                    raise Exception("未找到生成的视频")
+            else:
+                # 如果失败，返回制作方案
+                return self._generate_enhanced_video_plan(optimized_prompt, duration, "image-to-video", aspect_ratio)
 
         except Exception as e:
-            error_msg = f"图像到视频生成失败: {str(e)}"
-            print(error_msg)
-            return {
-                'success': False,
-                'error': error_msg
-            }, 500
+            # 使用统一的错误处理
+            error_response, status_code = handle_api_error(e, "图像到视频生成")
+            return error_response, status_code
+
+    def generate_video_from_local_image_file(self, local_image_path, prompt="", duration=8, aspect_ratio="16:9"):
+        """
+        从已存在的本地图像文件生成视频 - 新增功能
+        """
+        try:
+            # 获取项目中的图像文件
+            project_image_path = os.path.join(current_app.root_path, '..', local_image_path)
+            project_image_path = os.path.abspath(project_image_path)
+
+            if not os.path.exists(project_image_path):
+                # 尝试相对于项目根目录的路径
+                alt_path = os.path.join(os.getcwd(), local_image_path)
+                if os.path.exists(alt_path):
+                    project_image_path = alt_path
+                else:
+                    raise Exception(f"本地图像文件不存在: {local_image_path}")
+
+            print(f"使用项目中的图像文件: {project_image_path}")
+            return self.generate_video_from_image(project_image_path, prompt, duration, aspect_ratio)
+
+        except Exception as e:
+            # 使用统一的错误处理
+            error_response, status_code = handle_api_error(e, "项目图像文件视频生成")
+            return error_response, status_code
 
     def get_video_styles(self):
         """获取可用的视频风格选项"""
@@ -392,11 +472,9 @@ class VideoGenerationService:
             }, 200
 
         except Exception as e:
-            print(f"生成制作方案失败: {str(e)}")
-            return {
-                'success': False,
-                'error': f'无法生成视频制作方案: {str(e)}'
-            }, 500
+            # 使用统一的错误处理
+            error_response, status_code = handle_api_error(e, "视频制作方案生成")
+            return error_response, status_code
 
     def _generate_preview_image(self, prompt, style):
         """生成预览图像"""

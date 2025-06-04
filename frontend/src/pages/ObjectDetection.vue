@@ -538,6 +538,7 @@ export default {
         }
       } catch (error) {
         console.error('加载YOLO模型失败:', error)
+        // 静默处理，不显示错误消息，因为这不是用户主动操作
       }
     }
 
@@ -617,17 +618,21 @@ export default {
         }
       } catch (error) {
         console.error('检测失败:', error)
-        // 检查是否是HTTP错误响应
-        if (error.response && error.response.data) {
-          const errorData = error.response.data
-          if (errorData.explanation || errorData.suggestion || errorData.message || errorData.detected_objects) {
-            result.value = errorData
-            ElMessage.warning(errorData.error || errorData.message || '检测失败')
-          } else {
-            ElMessage.error(errorData.error || error.message || '检测失败，请重试')
-          }
+
+        // 优先显示后端返回的友好错误信息
+        let errorMessage = error.message || '检测失败，请重试'
+
+        // 如果有建议信息，添加到错误消息中
+        if (error.suggestion) {
+          errorMessage += `\n建议：${error.suggestion}`
+        }
+
+        // 检查是否有特殊的检测结果数据（即使失败也可能有部分结果）
+        if (error.backendError && (error.backendError.explanation || error.backendError.detected_objects)) {
+          result.value = error.backendError
+          ElMessage.warning(errorMessage)
         } else {
-          ElMessage.error(error.message || '检测失败，请重试')
+          ElMessage.error(errorMessage)
         }
       } finally {
         loading.value = false

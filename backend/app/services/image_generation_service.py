@@ -6,7 +6,7 @@ import time
 import base64
 from google import genai
 from google.genai import types
-from ..utils.helpers import save_generated_image
+from ..utils.helpers import save_generated_image, init_gemini_client
 from flask import current_app
 
 
@@ -14,8 +14,8 @@ class ImageGenerationService:
     def __init__(self, client=None):
         """初始化图像生成服务"""
         if client is None:
-            # 如果没有提供client，创建一个新的
-            self.client = genai.Client(api_key=current_app.config['GEMINI_API_KEY'])
+            # 如果没有提供client，使用统一的客户端初始化方法
+            self.client = init_gemini_client()
         else:
             self.client = client
 

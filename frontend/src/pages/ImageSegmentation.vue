@@ -582,17 +582,21 @@ export default {
         }
       } catch (error) {
         console.error('分割失败:', error)
-        // 检查是否是HTTP错误响应
-        if (error.response && error.response.data) {
-          const errorData = error.response.data
-          if (errorData.explanation || errorData.suggestion || errorData.content_mismatch || errorData.message || errorData.detected_objects) {
-            result.value = errorData
-            ElMessage.warning(errorData.error || errorData.message || '分割失败')
-          } else {
-            ElMessage.error(errorData.error || error.message || '分割失败，请重试')
-          }
+
+        // 优先显示后端返回的友好错误信息
+        let errorMessage = error.message || '分割失败，请重试'
+
+        // 如果有建议信息，添加到错误消息中
+        if (error.suggestion) {
+          errorMessage += `\n建议：${error.suggestion}`
+        }
+
+        // 检查是否有特殊的分割结果数据（即使失败也可能有部分结果）
+        if (error.backendError && (error.backendError.explanation || error.backendError.content_mismatch || error.backendError.detected_objects)) {
+          result.value = error.backendError
+          ElMessage.warning(errorMessage)
         } else {
-          ElMessage.error(error.message || '分割失败，请重试')
+          ElMessage.error(errorMessage)
         }
       } finally {
         loading.value = false

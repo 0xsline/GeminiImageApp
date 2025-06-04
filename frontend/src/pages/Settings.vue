@@ -260,10 +260,14 @@ export default {
           }
         }
       } catch (error) {
+        // 优先显示后端返回的友好错误信息
+        let errorMessage = error.message || '连接失败，请检查网络或API密钥'
+
         apiStatus.value = {
           success: false,
-          message: '连接失败，请检查网络或API密钥'
+          message: errorMessage
         }
+
         console.error('API测试失败:', error)
       } finally {
         testing.value = false
