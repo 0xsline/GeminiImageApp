@@ -105,8 +105,8 @@
 
 ### 1️⃣ 克隆项目
 ```bash
-git clone https://github.com/yourusername/gemini-image-app.git
-cd gemini-image-app
+git clone https://github.com/0xsline/GeminiImageApp.git
+cd GeminiImageApp
 ```
 
 ### 2️⃣ 后端设置

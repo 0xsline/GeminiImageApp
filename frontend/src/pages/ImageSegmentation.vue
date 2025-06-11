@@ -16,20 +16,13 @@
             <h2 class="text-lg font-semibold text-gray-900">上传图像</h2>
           </div>
 
-          <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-            <input type="file" @change="handleFileUpload" accept="image/*" class="hidden" ref="fileInput">
-            <div v-if="!imagePreview" @click="$refs.fileInput.click()" class="cursor-pointer">
-              <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
-              <p class="text-gray-600 mb-2">点击上传图像</p>
-              <p class="text-sm text-gray-500">支持 JPG, PNG, GIF 格式</p>
-            </div>
-            <div v-else class="relative">
-              <img :src="imagePreview" class="max-w-full h-80 object-contain mx-auto rounded-lg">
-              <button @click="clearImage" class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600">
-                ×
-              </button>
-            </div>
-          </div>
+          <DragUpload
+            @file-selected="handleFileUpload"
+            @file-cleared="clearImage"
+            @error="handleUploadError"
+            click-text="点击上传图像或拖拽文件到此区域"
+            support-text="支持 JPG, PNG, GIF 格式"
+          />
         </div>
 
         <!-- 分割设置 -->
@@ -484,9 +477,13 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '@/services/api'
+import DragUpload from '@/components/DragUpload.vue'
 
 export default {
   name: 'ImageSegmentation',
+  components: {
+    DragUpload
+  },
   setup() {
     const selectedFile = ref(null)
     const imagePreview = ref('')
@@ -506,8 +503,7 @@ export default {
       'yolo11x': { name: 'YOLOv11 Extra Large', description: '最高精度，速度较慢' }
     })
 
-    const handleFileUpload = (event) => {
-      const file = event.target.files[0]
+    const handleFileUpload = (file) => {
       if (file) {
         selectedFile.value = file
         const reader = new FileReader()
@@ -519,13 +515,14 @@ export default {
       }
     }
 
+    const handleUploadError = (errorMessage) => {
+      ElMessage.error(errorMessage)
+    }
+
     const clearImage = () => {
       selectedFile.value = null
       imagePreview.value = ''
       result.value = null
-      if (fileInput.value) {
-        fileInput.value.value = ''
-      }
     }
 
     const segmentImage = async () => {
@@ -657,9 +654,9 @@ export default {
       confidenceThreshold,
       loading,
       result,
-      fileInput,
       availableYoloModels,
       handleFileUpload,
+      handleUploadError,
       clearImage,
       segmentImage,
       getImageUrl,
